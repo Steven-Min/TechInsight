@@ -1,0 +1,59 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: techinsight-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-techinsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-techinsight}
+      POSTGRES_DB: ${POSTGRES_DB:-techinsight}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      # ホスト側は 54320 を使用（ローカルの PostgreSQL 5432 との衝突を回避）
+      - "54320:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    container_name: techinsight-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-techinsight}:${POSTGRES_PASSWORD:-techinsight}@db:5432/${POSTGRES_DB:-techinsight}
+      SEED_CSV_PATH: /app/data/articles.csv
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    volumes:
+      # ホストの data/ に articles.csv を置くと初回起動時に取り込まれる
+      - ./data:/app/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_INTERNAL_URL: http://backend:8000
+    container_name: techinsight-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  db_data:
