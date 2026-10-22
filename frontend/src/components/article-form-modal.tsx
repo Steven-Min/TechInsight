@@ -30,6 +30,13 @@ const EMPTY_FORM: FormState = {
   published_at: "",
 };
 
+// ISO 文字列 → ローカルタイムゾーンでの YYYY-MM-DD（UTC 日付をそのまま切り出すと1日ずれる）
+function toLocalDateString(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function toInput(form: FormState): ArticleInput {
   return {
     title: form.title.trim(),
@@ -41,7 +48,10 @@ function toInput(form: FormState): ArticleInput {
       .filter(Boolean)
       .slice(0, 20),
     author: form.author.trim() || null,
-    published_at: form.published_at ? new Date(form.published_at).toISOString() : null,
+    // date 入力はローカルタイムゾーンの 0時として解釈する
+    published_at: form.published_at
+      ? new Date(`${form.published_at}T00:00:00`).toISOString()
+      : null,
   };
 }
 
@@ -68,7 +78,7 @@ export function ArticleFormModal({ articleId, onClose }: ArticleFormModalProps) 
         tags: existing.tags.join(", "),
         author: existing.author ?? "",
         published_at: existing.published_at
-          ? existing.published_at.slice(0, 10)
+          ? toLocalDateString(existing.published_at)
           : "",
       });
     }
