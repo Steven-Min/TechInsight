@@ -115,7 +115,9 @@ class ArticleService:
 
     async def search(self, q: str, mode: SearchMode, limit: int) -> SearchResponse:
         if mode == SearchMode.keyword:
-            pairs = await self.repo.keyword_search(q, limit)
+            pairs = await self.repo.keyword_search(
+                q, limit, get_settings().keyword_candidate_cap
+            )
         elif mode == SearchMode.semantic:
             query_vector = await EmbeddingService.embed_query_async(q)
             pairs = await self.repo.semantic_search(query_vector, limit)
@@ -140,7 +142,9 @@ class ArticleService:
         安定的に融合できるため RRF を採用。
         """
         query_vector = await EmbeddingService.embed_query_async(q)
-        keyword_results = await self.repo.keyword_search(q, limit * 2)
+        keyword_results = await self.repo.keyword_search(
+            q, limit * 2, get_settings().keyword_candidate_cap
+        )
         semantic_results = await self.repo.semantic_search(query_vector, limit * 2)
 
         scores: dict[int, float] = {}

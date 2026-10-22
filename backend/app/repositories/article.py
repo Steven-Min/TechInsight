@@ -82,18 +82,34 @@ class ArticleRepository:
             return cap, False
         return n, True
 
-    async def keyword_search(self, q: str, limit: int) -> list[tuple[Article, float]]:
-        """pg_trgm の類似度を併用したキーワード検索。"""
+    async def keyword_search(
+        self, q: str, limit: int, candidate_cap: int = 1_000
+    ) -> list[tuple[Article, float]]:
+        """pg_trgm の類似度を併用したキーワード検索（候補打ち切り方式）。
+
+        マッチ全件を similarity() でスコアリングするとヒット数に比例して
+        遅くなるため、2段構成にする:
+          1. trigram インデックスで候補を candidate_cap 件まで取得して打ち切り
+          2. 候補のみスコアリングして上位 limit 件を返す
+        ヒット数がいくら多くても、ヒープ読取・スコア計算・ソートのコストが
+        candidate_cap で頭打ちになる（再現率とのトレードオフは docs 参照）。
+        """
         pattern = f"%{q}%"
+        candidates = (
+            select(Article.id)
+            .where(
+                or_(Article.title.ilike(pattern), Article.content.ilike(pattern))
+            )
+            .limit(candidate_cap)
+            .subquery()
+        )
         sim = func.greatest(
             func.similarity(Article.title, q),
             func.similarity(func.left(Article.content, 1000), q),
         )
         stmt = (
             select(Article, sim.label("score"))
-            .where(
-                or_(Article.title.ilike(pattern), Article.content.ilike(pattern))
-            )
+            .join(candidates, Article.id == candidates.c.id)
             .order_by(sim.desc(), Article.published_at.desc().nulls_last())
             .limit(limit)
         )
