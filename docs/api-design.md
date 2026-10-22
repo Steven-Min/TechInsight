@@ -22,11 +22,11 @@
 
 ## 3. 詳細
 
-### GET /articles — 記事一覧
+### GET /articles — 記事一覧（keyset ページネーション）
 
 | パラメータ | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `page` | int (>=1) | 1 | ページ番号 |
+| `cursor` | string | - | 前ページのレスポンスの `next_cursor`。先頭ページは省略。不正値は 422 |
 | `page_size` | int (1..100) | 12 | 1ページ件数 |
 | `q` | string | - | タイトル・本文の部分一致（pg_trgm） |
 | `category` | string | - | カテゴリ完全一致 |
@@ -49,11 +49,21 @@
   ],
   "total": 1000,
   "total_relation": "approx",
-  "page": 1,
   "page_size": 12,
-  "total_pages": 84
+  "next_cursor": "eyJwIjoiMjAyNS0wOS0xOVQyMjowMDowMCswMDowMCIsImkiOjF9"
 }
 ```
+
+**keyset（カーソル）方式について**
+
+OFFSET ページネーションはスキップ行数に比例して劣化する（10万件・OFFSET 50,000 で 101ms を実測）ため、
+「直前ページ最終行のソートキーより後ろ」を行値比較で取得する keyset 方式を採用。
+ソートキー `(COALESCE(published_at, '-infinity') DESC, id DESC)` の複合式インデックスにより、
+ページ深度によらず一定コストで取得できる。
+
+- `next_cursor` は最終行の位置を base64url エンコードしたオペーク値。クライアントは解釈せずそのまま渡す
+- `next_cursor` が `null` なら最終ページ
+- 任意ページへのランダムジャンプは不可（UI は前へ/次へのみのため影響なし。「前へ」はクライアント側のカーソル履歴で実現）
 
 > 一覧では本文全文ではなく `excerpt`（先頭200文字）を返し、転送量を抑える。
 

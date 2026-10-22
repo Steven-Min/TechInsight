@@ -1,6 +1,8 @@
 """記事リポジトリ。DB アクセスをこの層に集約する。"""
 
-from sqlalchemy import Select, delete, func, or_, select, text
+from datetime import datetime
+
+from sqlalchemy import Select, and_, delete, func, or_, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import Article
@@ -28,21 +30,44 @@ class ArticleRepository:
             stmt = stmt.where(Article.category == category)
         return stmt
 
-    async def list_page(
+    # ソートキー。NULLS LAST 相当を COALESCE('-infinity') で表現することで、
+    # keyset 述語（行値比較）と ORDER BY の両方で複合式インデックスが効く
+    _sort_key = func.coalesce(
+        Article.published_at, text("'-infinity'::timestamptz")
+    )
+
+    async def list_keyset(
         self,
-        page: int,
         page_size: int,
+        cursor: tuple[datetime | None, int] | None = None,
         q: str | None = None,
         category: str | None = None,
     ) -> list[Article]:
+        """keyset（カーソル）方式の一覧取得。
+
+        OFFSET はスキップ行数に比例して劣化するため、「直前ページ最終行の
+        ソートキーより後ろ」を行値比較で取得する。ページ深度によらず一定コスト。
+        次ページ有無の判定用に page_size + 1 件返す（呼び出し側で切り詰める）。
+        """
         stmt = select(Article)
         stmt = self._apply_filters(stmt, q, category)
-        stmt = (
-            stmt.order_by(
-                Article.published_at.desc().nulls_last(), Article.id.desc()
-            )
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+
+        if cursor is not None:
+            published_at, article_id = cursor
+            if published_at is not None:
+                stmt = stmt.where(
+                    tuple_(self._sort_key, Article.id)
+                    < tuple_(published_at, article_id)
+                )
+            else:
+                # カーソル行が published_at NULL（ソート末尾グループ）の場合、
+                # 残りは同グループ内で id が小さい行のみ
+                stmt = stmt.where(
+                    and_(Article.published_at.is_(None), Article.id < article_id)
+                )
+
+        stmt = stmt.order_by(self._sort_key.desc(), Article.id.desc()).limit(
+            page_size + 1
         )
         rows = (await self.db.execute(stmt)).scalars().all()
         return list(rows)
