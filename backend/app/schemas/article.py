@@ -1,12 +1,12 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 CONTENT_EXCERPT_LENGTH = 200
 
 
-class SearchMode(str, Enum):
+class SearchMode(StrEnum):
     keyword = "keyword"
     semantic = "semantic"
     hybrid = "hybrid"

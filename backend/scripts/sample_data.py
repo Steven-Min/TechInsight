@@ -5,7 +5,7 @@
 """
 
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 TOPICS = [
@@ -82,7 +82,7 @@ AUTHORS = ["田中太郎", "佐藤花子", "鈴木一郎", "高橋美咲", "伊�
 
 def generate_sample_articles(count: int = 1000) -> list[dict[str, Any]]:
     rng = random.Random(42)  # 再現性のため固定シード
-    base_date = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    base_date = datetime(2024, 1, 1, tzinfo=UTC)
     articles: list[dict[str, Any]] = []
 
     for i in range(count):

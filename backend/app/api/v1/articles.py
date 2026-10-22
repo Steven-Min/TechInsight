@@ -23,14 +23,20 @@ def get_service(db: AsyncSession = Depends(get_db)) -> ArticleService:
 async def list_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(12, ge=1, le=100),
-    q: str | None = Query(None, max_length=200, description="タイトル・本文の部分一致"),
+    q: str | None = Query(
+        None, max_length=200, description="タイトル・本文の部分一致"
+    ),
     category: str | None = Query(None, max_length=128),
     service: ArticleService = Depends(get_service),
 ) -> PaginatedArticles:
     return await service.list_paginated(page, page_size, q, category)
 
 
-@router.get("/search", response_model=SearchResponse, summary="セマンティック / キーワード / ハイブリッド検索")
+@router.get(
+    "/search",
+    response_model=SearchResponse,
+    summary="セマンティック / キーワード / ハイブリッド検索",
+)
 async def search_articles(
     q: str = Query(..., min_length=1, max_length=500, description="自然言語クエリ"),
     mode: SearchMode = Query(SearchMode.semantic),

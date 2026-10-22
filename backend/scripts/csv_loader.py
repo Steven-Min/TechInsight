@@ -8,7 +8,7 @@
 import csv
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,7 +83,7 @@ def parse_datetime(raw: str | None) -> datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -104,7 +104,7 @@ def load_articles_csv(path: Path) -> list[dict[str, Any]]:
 
         rows: list[dict[str, Any]] = []
         skipped = 0
-        for line_no, row in enumerate(reader, start=2):
+        for row in reader:
             title = (row.get(mapping["title"]) or "").strip()
             content = (row.get(mapping["content"]) or "").strip()
             if not title or not content:

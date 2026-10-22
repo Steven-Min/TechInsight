@@ -104,7 +104,7 @@ async def generate_embeddings() -> None:
             ]
             vectors = await EmbeddingService.embed_passages_async(texts)
 
-            for (article_id, _, _), vector in zip(batch, vectors):
+            for (article_id, _, _), vector in zip(batch, vectors, strict=True):
                 await session.execute(
                     update(Article)
                     .where(Article.id == article_id)
