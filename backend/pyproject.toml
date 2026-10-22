@@ -10,6 +10,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP"]
+# B008: FastAPI は Depends()/Query() をデフォルト引数で使う設計のため除外
+ignore = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

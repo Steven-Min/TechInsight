@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -55,8 +55,8 @@ class TestParsers:
         assert dt.tzinfo is not None
 
     def test_parse_datetime_formats(self):
-        assert parse_datetime("2024/05/01") == datetime(2024, 5, 1, tzinfo=timezone.utc)
-        assert parse_datetime("2024-05-01") == datetime(2024, 5, 1, tzinfo=timezone.utc)
+        assert parse_datetime("2024/05/01") == datetime(2024, 5, 1, tzinfo=UTC)
+        assert parse_datetime("2024-05-01") == datetime(2024, 5, 1, tzinfo=UTC)
         assert parse_datetime("invalid") is None
         assert parse_datetime(None) is None
 
