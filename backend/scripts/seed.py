@@ -13,7 +13,7 @@ import logging
 import sys
 from pathlib import Path
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 
 from app.core.config import get_settings
 from app.db.session import AsyncSessionLocal, engine
@@ -53,6 +53,13 @@ async def seed() -> None:
             logger.info("Inserted %d / %d", min(i + INSERT_BATCH_SIZE, len(rows)), len(rows))
 
     await generate_embeddings()
+
+    # 一覧APIの概算カウント（pg_class.reltuples）が初回から正確になるよう
+    # 統計情報を更新しておく（autovacuum を待たない）
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("ANALYZE articles"))
+        await session.commit()
+
     logger.info("Seed completed.")
 
 

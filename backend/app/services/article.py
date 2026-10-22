@@ -5,6 +5,7 @@ import math
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.article import Article
 from app.repositories.article import ArticleRepository
 from app.schemas.article import (
@@ -15,6 +16,7 @@ from app.schemas.article import (
     SearchMode,
     SearchResponse,
     SearchResultItem,
+    TotalRelation,
 )
 from app.services.embedding import EmbeddingService
 
@@ -37,14 +39,43 @@ class ArticleService:
     async def list_paginated(
         self, page: int, page_size: int, q: str | None, category: str | None
     ) -> PaginatedArticles:
-        articles, total = await self.repo.list_paginated(page, page_size, q, category)
+        articles = await self.repo.list_page(page, page_size, q, category)
+        total, relation = await self._count_total(q, category)
+
+        total_pages = max(1, math.ceil(total / page_size))
+        # 概算・打ち切りにより実ページと食い違う場合の安全弁:
+        # 記事が返っているページを「存在しないページ」として扱わない
+        if articles and page > total_pages:
+            total_pages = page
+
         return PaginatedArticles(
             items=[ArticleListItem.from_article(a) for a in articles],
             total=total,
+            total_relation=relation,
             page=page,
             page_size=page_size,
-            total_pages=max(1, math.ceil(total / page_size)),
+            total_pages=total_pages,
         )
+
+    async def _count_total(
+        self, q: str | None, category: str | None
+    ) -> tuple[int, TotalRelation]:
+        """一覧の総件数を返す。正確な COUNT(*) は件数に比例して重くなるため、
+
+        - フィルタなし: プランナ統計による概算（approx）。統計未収集時のみ
+          上限付きカウントにフォールバック
+        - フィルタあり: 上限（list_count_cap）まで数えて打ち切り。
+          上限未満なら正確（eq）、到達したら下限値として返す（gte）
+        """
+        cap = get_settings().list_count_cap
+
+        if not q and not category:
+            estimate = await self.repo.estimate_total()
+            if estimate is not None:
+                return estimate, "approx"
+
+        total, is_exact = await self.repo.count_capped(q, category, cap)
+        return total, "eq" if is_exact else "gte"
 
     async def create(self, payload: ArticleCreate) -> Article:
         article = Article(**payload.model_dump())

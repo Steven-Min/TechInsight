@@ -16,9 +16,22 @@ import { Pagination } from "@/components/pagination";
 import { SearchBar } from "@/components/search-bar";
 import { useToast } from "@/components/toast";
 import { api, ApiError } from "@/lib/api";
-import type { SearchMode } from "@/lib/types";
+import type { PaginatedArticles, SearchMode } from "@/lib/types";
 
 const PAGE_SIZE = 12;
+
+function formatTotal(data: PaginatedArticles | undefined): string {
+  if (!data) return "全 0 件";
+  const n = data.total.toLocaleString("ja-JP");
+  switch (data.total_relation) {
+    case "gte":
+      return `${n}+ 件`;
+    case "approx":
+      return `約 ${n} 件`;
+    default:
+      return `全 ${n} 件`;
+  }
+}
 
 export default function HomePage() {
   const queryClient = useQueryClient();
@@ -178,7 +191,7 @@ export default function HomePage() {
             <p className="mb-3 text-sm text-slate-500" role="status">
               {showingSearchResults
                 ? `「${submittedQuery}」の検索結果 ${cards.length} 件`
-                : `全 ${listQuery.data?.total ?? 0} 件`}
+                : formatTotal(listQuery.data)}
             </p>
           )}
 

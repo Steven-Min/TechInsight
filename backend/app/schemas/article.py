@@ -1,9 +1,14 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 CONTENT_EXCERPT_LENGTH = 200
+
+# total の性質（Elasticsearch の hits.total.relation に倣う）
+#   eq: 正確な件数 / gte: 上限打ち切り（実際は total 件以上） / approx: 統計による概算
+TotalRelation = Literal["eq", "gte", "approx"]
 
 
 class SearchMode(StrEnum):
@@ -78,6 +83,7 @@ class ArticleListItem(BaseModel):
 class PaginatedArticles(BaseModel):
     items: list[ArticleListItem]
     total: int
+    total_relation: TotalRelation = "eq"
     page: int
     page_size: int
     total_pages: int

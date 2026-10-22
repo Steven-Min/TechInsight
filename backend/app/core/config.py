@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     seed_csv_path: str = "data/articles.csv"
     seed_fallback_count: int = 1000
 
+    # 一覧APIの件数カウント上限。フィルタ付き一覧はこの件数まで数えて打ち切り、
+    # 超過時は total_relation = "gte" として返す（全件スキャンの肥大化を防ぐ）
+    list_count_cap: int = 10_000
+
     cors_origins: str = "http://localhost:3000"
 
     @property

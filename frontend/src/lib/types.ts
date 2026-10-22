@@ -23,9 +23,18 @@ export interface Article {
   updated_at: string;
 }
 
+/**
+ * total の性質:
+ * - eq: 正確な件数
+ * - gte: 上限打ち切り（実際は total 件以上）
+ * - approx: DB 統計による概算
+ */
+export type TotalRelation = "eq" | "gte" | "approx";
+
 export interface PaginatedArticles {
   items: ArticleListItem[];
   total: number;
+  total_relation: TotalRelation;
   page: number;
   page_size: number;
   total_pages: number;
