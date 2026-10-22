@@ -45,12 +45,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listArticles(params: {
-    page: number;
+    cursor?: string | null;
     pageSize?: number;
     q?: string;
     category?: string;
   }): Promise<PaginatedArticles> {
-    const query = new URLSearchParams({ page: String(params.page) });
+    const query = new URLSearchParams();
+    if (params.cursor) query.set("cursor", params.cursor);
     if (params.pageSize) query.set("page_size", String(params.pageSize));
     if (params.q) query.set("q", params.q);
     if (params.category) query.set("category", params.category);

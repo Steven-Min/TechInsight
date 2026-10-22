@@ -1,11 +1,11 @@
 """記事サービス。ビジネスロジック（Embedding 連携・検索モード分岐）を担う。"""
 
 import logging
-import math
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.cursor import decode_cursor, encode_cursor
 from app.models.article import Article
 from app.repositories.article import ArticleRepository
 from app.schemas.article import (
@@ -37,24 +37,27 @@ class ArticleService:
         return await self.repo.get(article_id)
 
     async def list_paginated(
-        self, page: int, page_size: int, q: str | None, category: str | None
+        self, cursor: str | None, page_size: int, q: str | None, category: str | None
     ) -> PaginatedArticles:
-        articles = await self.repo.list_page(page, page_size, q, category)
+        decoded = decode_cursor(cursor) if cursor else None
+        rows = await self.repo.list_keyset(page_size, decoded, q, category)
         total, relation = await self._count_total(q, category)
 
-        total_pages = max(1, math.ceil(total / page_size))
-        # 概算・打ち切りにより実ページと食い違う場合の安全弁:
-        # 記事が返っているページを「存在しないページ」として扱わない
-        if articles and page > total_pages:
-            total_pages = page
+        # page_size + 1 件取得しているため、超過分の有無が次ページ有無
+        has_next = len(rows) > page_size
+        articles = rows[:page_size]
+        next_cursor = (
+            encode_cursor(articles[-1].published_at, articles[-1].id)
+            if has_next
+            else None
+        )
 
         return PaginatedArticles(
             items=[ArticleListItem.from_article(a) for a in articles],
             total=total,
             total_relation=relation,
-            page=page,
             page_size=page_size,
-            total_pages=total_pages,
+            next_cursor=next_cursor,
         )
 
     async def _count_total(

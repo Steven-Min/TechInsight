@@ -35,9 +35,9 @@ export interface PaginatedArticles {
   items: ArticleListItem[];
   total: number;
   total_relation: TotalRelation;
-  page: number;
   page_size: number;
-  total_pages: number;
+  /** 次ページ取得用カーソル。null なら最終ページ */
+  next_cursor: string | null;
 }
 
 export interface SearchResultItem {

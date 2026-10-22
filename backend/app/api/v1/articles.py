@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cursor import InvalidCursorError
 from app.db.session import get_db
 from app.schemas.article import (
     ArticleCreate,
@@ -21,7 +22,11 @@ def get_service(db: AsyncSession = Depends(get_db)) -> ArticleService:
 
 @router.get("", response_model=PaginatedArticles, summary="記事一覧（キーワード絞込可）")
 async def list_articles(
-    page: int = Query(1, ge=1),
+    cursor: str | None = Query(
+        None,
+        max_length=256,
+        description="前ページのレスポンスの next_cursor（先頭ページは省略）",
+    ),
     page_size: int = Query(12, ge=1, le=100),
     q: str | None = Query(
         None, max_length=200, description="タイトル・本文の部分一致"
@@ -29,7 +34,10 @@ async def list_articles(
     category: str | None = Query(None, max_length=128),
     service: ArticleService = Depends(get_service),
 ) -> PaginatedArticles:
-    return await service.list_paginated(page, page_size, q, category)
+    try:
+        return await service.list_paginated(cursor, page_size, q, category)
+    except InvalidCursorError:
+        raise HTTPException(status_code=422, detail="Invalid cursor") from None
 
 
 @router.get(

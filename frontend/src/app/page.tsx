@@ -41,7 +41,11 @@ export default function HomePage() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<SearchMode>("keyword");
   const [category, setCategory] = useState("");
-  const [page, setPage] = useState(1);
+  // keyset ページネーション: 現在位置に至るカーソルの履歴（空 = 先頭ページ）。
+  // 「前へ」は履歴を pop するだけなので、逆方向クエリが不要
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const cursor = cursorStack[cursorStack.length - 1] ?? null;
+  const pageNumber = cursorStack.length + 1;
   // セマンティック / ハイブリッドは送信時に確定するクエリ
   const [submittedQuery, setSubmittedQuery] = useState("");
   // キーワードモードはデバウンスして自動検索
@@ -53,7 +57,7 @@ export default function HomePage() {
   }, [input]);
 
   useEffect(() => {
-    setPage(1);
+    setCursorStack([]);
   }, [debouncedInput, category]);
 
   const isSemanticMode = mode !== "keyword";
@@ -66,10 +70,15 @@ export default function HomePage() {
   });
 
   const listQuery = useQuery({
-    queryKey: ["articles", page, isSemanticMode ? "" : debouncedInput, category],
+    queryKey: [
+      "articles",
+      cursor,
+      isSemanticMode ? "" : debouncedInput,
+      category,
+    ],
     queryFn: () =>
       api.listArticles({
-        page,
+        cursor,
         pageSize: PAGE_SIZE,
         q: isSemanticMode ? undefined : debouncedInput || undefined,
         category: category || undefined,
@@ -245,9 +254,13 @@ export default function HomePage() {
           {!showingSearchResults && listQuery.data && (
             <div className="mt-6">
               <Pagination
-                page={page}
-                totalPages={listQuery.data.total_pages}
-                onPageChange={setPage}
+                page={pageNumber}
+                hasNext={Boolean(listQuery.data.next_cursor)}
+                onPrev={() => setCursorStack((s) => s.slice(0, -1))}
+                onNext={() => {
+                  const next = listQuery.data?.next_cursor;
+                  if (next) setCursorStack((s) => [...s, next]);
+                }}
               />
             </div>
           )}

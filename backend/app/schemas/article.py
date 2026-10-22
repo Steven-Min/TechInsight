@@ -81,12 +81,17 @@ class ArticleListItem(BaseModel):
 
 
 class PaginatedArticles(BaseModel):
+    """keyset（カーソル）ページネーションの一覧レスポンス。
+
+    next_cursor が null でなければ続きがあり、そのまま ?cursor= に渡す。
+    total / total_relation は概算を含む（詳細は api-design.md）。
+    """
+
     items: list[ArticleListItem]
     total: int
     total_relation: TotalRelation = "eq"
-    page: int
     page_size: int
-    total_pages: int
+    next_cursor: str | None = None
 
 
 class SearchResultItem(BaseModel):

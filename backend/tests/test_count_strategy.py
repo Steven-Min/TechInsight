@@ -13,14 +13,16 @@ class StubRepo:
         self,
         estimate: int | None = None,
         capped: tuple[int, bool] = (0, True),
+        rows: list | None = None,
     ):
         self._estimate = estimate
         self._capped = capped
+        self._rows = rows or []
         self.estimate_calls = 0
         self.capped_calls: list[tuple] = []
 
-    async def list_page(self, page, page_size, q, category):
-        return []
+    async def list_keyset(self, page_size, cursor=None, q=None, category=None):
+        return self._rows
 
     async def estimate_total(self):
         self.estimate_calls += 1
@@ -41,20 +43,22 @@ def make_service(repo: StubRepo) -> ArticleService:
 class TestCountStrategy:
     def test_unfiltered_uses_estimate(self):
         repo = StubRepo(estimate=5000)
-        result = asyncio.run(make_service(repo).list_paginated(1, 12, None, None))
+        result = asyncio.run(make_service(repo).list_paginated(None, 12, None, None))
         assert result.total == 5000
         assert result.total_relation == "approx"
         assert repo.capped_calls == []  # 正確な count は実行しない
 
     def test_unfiltered_falls_back_when_no_statistics(self):
         repo = StubRepo(estimate=None, capped=(42, True))
-        result = asyncio.run(make_service(repo).list_paginated(1, 12, None, None))
+        result = asyncio.run(make_service(repo).list_paginated(None, 12, None, None))
         assert result.total == 42
         assert result.total_relation == "eq"
 
     def test_filtered_exact_under_cap(self):
         repo = StubRepo(capped=(120, True))
-        result = asyncio.run(make_service(repo).list_paginated(1, 12, "docker", None))
+        result = asyncio.run(
+            make_service(repo).list_paginated(None, 12, "docker", None)
+        )
         assert result.total == 120
         assert result.total_relation == "eq"
         assert repo.estimate_calls == 0  # フィルタ付きは統計概算を使わない
@@ -62,14 +66,7 @@ class TestCountStrategy:
     def test_filtered_capped_returns_gte(self):
         repo = StubRepo(capped=(10_000, False))
         result = asyncio.run(
-            make_service(repo).list_paginated(1, 12, None, "Backend")
+            make_service(repo).list_paginated(None, 12, None, "Backend")
         )
         assert result.total == 10_000
         assert result.total_relation == "gte"
-        assert result.total_pages == 834  # ceil(10000 / 12)
-
-    def test_total_pages_has_minimum_of_one(self):
-        repo = StubRepo(capped=(0, True))
-        result = asyncio.run(make_service(repo).list_paginated(1, 12, "nohit", None))
-        assert result.total == 0
-        assert result.total_pages == 1
