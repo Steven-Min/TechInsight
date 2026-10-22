@@ -92,7 +92,10 @@
 
 - `semantic`: クエリを Embedding 化し、pgvector の HNSW インデックスでコサイン類似度上位を返す。`score` = 類似度（0〜1）
 - `keyword`: pg_trgm の `similarity` を併用した部分一致。`score` = trigram 類似度
-- `hybrid`: 両者の順位を RRF（k=60）で融合。`score` = RRF スコア
+  - **候補打ち切り**: trigram インデックスで候補を上限（既定 1,000 件・`KEYWORD_CANDIDATE_CAP`）まで
+    取得してからスコアリングする。ヒット数の多い語でも応答時間が頭打ちになる代わりに、
+    上限超過時は候補外の文書がランキングから漏れうる（再現率とのトレードオフ）
+- `hybrid`: 両者の順位を RRF（k=60）で融合。`score` = RRF スコア（キーワード側は上記の打ち切りが適用される）
 
 ### POST /articles — 作成
 

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # 超過時は total_relation = "gte" として返す（全件スキャンの肥大化を防ぐ）
     list_count_cap: int = 10_000
 
+    # キーワード検索で similarity スコアリングの対象とする候補数の上限。
+    # ヒット数の多い語でも、スコア計算・ソートのコストをこの件数で頭打ちにする
+    keyword_candidate_cap: int = 1_000
+
     cors_origins: str = "http://localhost:3000"
 
     @property
