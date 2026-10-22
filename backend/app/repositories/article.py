@@ -1,6 +1,6 @@
 """記事リポジトリ。DB アクセスをこの層に集約する。"""
 
-from sqlalchemy import Select, delete, func, or_, select
+from sqlalchemy import Select, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import Article
@@ -28,28 +28,59 @@ class ArticleRepository:
             stmt = stmt.where(Article.category == category)
         return stmt
 
-    async def list_paginated(
+    async def list_page(
         self,
         page: int,
         page_size: int,
         q: str | None = None,
         category: str | None = None,
-    ) -> tuple[list[Article], int]:
-        base = select(Article)
-        base = self._apply_filters(base, q, category)
-
-        count_stmt = select(func.count()).select_from(base.subquery())
-        total = (await self.db.execute(count_stmt)).scalar_one()
-
+    ) -> list[Article]:
+        stmt = select(Article)
+        stmt = self._apply_filters(stmt, q, category)
         stmt = (
-            base.order_by(
+            stmt.order_by(
                 Article.published_at.desc().nulls_last(), Article.id.desc()
             )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
         rows = (await self.db.execute(stmt)).scalars().all()
-        return list(rows), total
+        return list(rows)
+
+    async def estimate_total(self) -> int | None:
+        """プランナ統計（pg_class.reltuples）による全件数の概算値。
+
+        正確な COUNT(*) は件数に比例してコストが増えるため、フィルタなしの
+        一覧ではこの概算を用いる。ANALYZE 未実行（reltuples <= 0）の場合は
+        None を返し、呼び出し側で上限付きカウントにフォールバックする。
+        """
+        result = await self.db.execute(
+            text(
+                "SELECT reltuples::bigint FROM pg_class "
+                "WHERE oid = 'articles'::regclass"
+            )
+        )
+        value = result.scalar_one_or_none()
+        if value is None or value <= 0:
+            return None
+        return int(value)
+
+    async def count_capped(
+        self, q: str | None, category: str | None, cap: int
+    ) -> tuple[int, bool]:
+        """フィルタ適用後の件数を cap + 1 件まで数えて打ち切る。
+
+        戻り値は (件数, 正確かどうか)。cap 超過時は (cap, False) を返し、
+        ヒット数が莫大なクエリでも count のコストを一定に抑える。
+        """
+        base = select(Article.id)
+        base = self._apply_filters(base, q, category)
+        subq = base.limit(cap + 1).subquery()
+        count_stmt = select(func.count()).select_from(subq)
+        n = (await self.db.execute(count_stmt)).scalar_one()
+        if n > cap:
+            return cap, False
+        return n, True
 
     async def keyword_search(self, q: str, limit: int) -> list[tuple[Article, float]]:
         """pg_trgm の類似度を併用したキーワード検索。"""
